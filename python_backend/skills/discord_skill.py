@@ -51,23 +51,14 @@ def _focus_discord_linux():
     return True
 
 
-def _focus_discord_mac():
-    try:
-        subprocess.run(["open", "-a", "Discord"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except:
-        pass
-    time.sleep(0.8)
-    return True
-
-
 def _focus_discord():
     """İşletim sistemine göre doğru odaklanma işçisini çağırır."""
     if CURRENT_OS == "Windows":
         return _focus_discord_windows()
     elif CURRENT_OS == "Linux":
         return _focus_discord_linux()
-    elif CURRENT_OS == "Darwin":
-        return _focus_discord_mac()
+    else:
+        print(f"[DİSCORD YETENEĞİ] HATA: Desteklenmeyen İşletim Sistemi ({CURRENT_OS})")
     return False
 
 
@@ -80,7 +71,7 @@ def _send_keys_waterfall(search_query):
     Biri başarısız olursa diğerine geçer. Hiçbiri çalışmazsa False döner.
     """
 
-    # KATMAN 1: PyAutoGUI (Windows, Mac, Linux X11)
+    # KATMAN 1: PyAutoGUI (Windows, Linux X11)
     try:
         import pyautogui
         import pyperclip

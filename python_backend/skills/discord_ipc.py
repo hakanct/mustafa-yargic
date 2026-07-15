@@ -162,12 +162,16 @@ class DiscordIPC:
                 else:
                     self.client.select_text_channel(best_match["id"])
 
+                self.update_cache(best_match["server"], best_match["category"], best_match["channel"], best_match["id"], best_match["type"])
+
                 return {"status": "success", "channel": best_match["channel"]}
 
             except Exception as e:
-                # 5003 hatası alırsak zaten o kanadayız demektir, bunu BAŞARI say!
                 if "5003" in str(e):
                     print(f"[DİSCORD IPC] Zaten '{best_match['channel']}' kanalındasınız!")
+
+                    self.update_cache(best_match["server"], best_match["category"], best_match["channel"], best_match["id"], best_match["type"])
+
                     return {"status": "success", "channel": best_match["channel"]}
 
                 print(f"[DİSCORD IPC HATA] Işınlanma başarısız oldu: {e}")

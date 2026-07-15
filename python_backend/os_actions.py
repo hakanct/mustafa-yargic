@@ -40,8 +40,7 @@ def load_aliases():
     else:
         print(f"[SİSTEM] {file_path} bulunamadı. Örnek şablon oluşturuluyor...")
         default_aliases = {
-            "discord": "flatpak run com.discordapp.Discord" if CURRENT_OS == "Linux" else "C:\\Program Files\\Discord\\Update.exe --processStart Discord.exe",
-            "youtube music": "flatpak run app.ytmdesktop.ytmdesktop" if CURRENT_OS == "Linux" else "youtube music"
+            "discord": "flatpak run com.discordapp.Discord" if CURRENT_OS == "Linux" else "C:\\Program Files\\Discord\\Update.exe --processStart Discord.exe"
         }
         with open(file_path, "w", encoding="utf-8") as file:
             json.dump(default_aliases, file, indent=4, ensure_ascii=False)
