@@ -1,0 +1,29 @@
+# ==============================
+# MUSTAFA YARGIÇ .gitignore
+# ==============================
+
+# Python ve Sanal Ortamlar (BUNLAR ASLA GİT'E YÜKLENMEZ)
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Gizli API Anahtarları ve Çevre Değişkenleri (ÇOK KRİTİK)
+.env
+
+# İşletim Sistemi Kalıntıları
+.DS_Store
+Thumbs.db
+
+# IDE ve Editör Ayarları
+.vscode/
+.idea/
+*.swp
+
+# (Eğer proje klasöründe test amaçlı oluşturduğun JSON cache dosyaları varsa)
+discord_cache.json
+discord_tokens.json
+app_aliases.json
