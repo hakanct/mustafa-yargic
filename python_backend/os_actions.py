@@ -2,6 +2,8 @@ import os
 import json
 import subprocess
 import re
+from encodings.hex_codec import hex_decode
+
 import psutil
 import platform
 import shutil
@@ -387,6 +389,94 @@ def system_audio_control(action="toggle"):
     except Exception as e:
         print(f"[DONANIM] Hoparlör kontrol hatası: {e}")
         return False
+
+
+
+# ==========================================
+# MEDYA KONTROLLERİ
+# ==========================================
+def _media_control_linux(action):
+    try:
+        subprocess.run(["playerctl", action], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception as e:
+        print(f"[Linux] Medya kontrol hatası: {e}")
+
+def _media_control_windows(action):
+    import ctypes
+
+    if action in ["play", "pause"]:
+        is_playing = _is_media_playing_windows()
+
+        if is_playing is not None:
+            if action == "play" and is_playing:
+                print("[MEDYA] Medya zaten çalıyor. Tuş basma işlemi pas geçildi.")
+                return True
+            elif action == "pause" and not is_playing:
+                print("[MEDYA] Medya zaten duraklatılmış. Tuş basma işlemi pas geçildi.")
+                return True
+
+    VK_MEDIA_NEXT = 0xB0
+    VK_MEDIA_PREV = 0xB1
+    VK_MEDIA_PLAY_PAUSE = 0xB3
+
+    windows_key_map = {
+        "play-pause": VK_MEDIA_PLAY_PAUSE,
+        "play": VK_MEDIA_PLAY_PAUSE,
+        "pause": VK_MEDIA_PLAY_PAUSE,
+        "next": VK_MEDIA_NEXT,
+        "previous": VK_MEDIA_PREV
+    }
+
+    vk_code = windows_key_map.get(action)
+
+    if vk_code:
+        ctypes.windll.user32.keybd_event(vk_code, 0, 0, 0) # key down
+        ctypes.windll.user32.keybd_event(vk_code, 0, 2, 0) # key up
+        print(f"[WINDOWS] Medya donanım tuşu tetiklendi: {action.upper()}")
+        return True
+    else:
+        print(f"[WINDOWS] Geçersiz medya komutu: {action}")
+        return False
+
+def _is_media_playing_windows():
+    """Windows'ta medyanın aktif olarak çalıp çalmadığını kontrol eder."""
+    import asyncio
+    try:
+        from winsdk.windows.media.control import GlobalSystemMediaTransportControlsSessionManager
+    except ImportError:
+        print("[WINDOWS] 'winsdk' kütüphanesi eksik. Durum tespiti yapılamıyor.")
+        return None  # Kütüphane yoksa kör atış yapmaya devam etmesi için None dönüyoruz
+
+    async def get_status():
+        manager = await GlobalSystemMediaTransportControlsSessionManager.request_async()
+        session = manager.get_current_session()
+        if session:
+            info = session.get_playback_info()
+            # PlaybackStatus değerleri: 4 = Stopped, 5 = Playing, 6 = Paused
+            return info.playback_status == 5
+        return False  # Açık bir medya uygulaması yoksa çalmıyordur
+
+        # Fonksiyon asenkron olduğu için anlık (sync) olarak çalıştırıp sonucunu alıyoruz
+
+    return asyncio.run(get_status())
+
+
+def media_control(action="toggle"):
+    media_actions = {
+        "toggle": "play-pause",
+        "play": "play",
+        "pause": "pause",
+        "next": "next",
+        "prev": "previous",
+    }
+    target_action = media_actions.get(action)
+    if target_action:
+        if CURRENT_OS == "Linux":
+            _media_control_linux(target_action)
+        elif CURRENT_OS == "Windows":
+            _media_control_windows(target_action)
+    else:
+        print(f"[MEDYA UYARISI] Geçersiz eylem: {action}")
 
 
 # --- TEST ALANI ---

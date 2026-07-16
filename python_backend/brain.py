@@ -196,7 +196,7 @@ class MustafaYargicBrain:
         elif intent == "add_task":
             print(f"[SİSTEM] N8N'e gönderilecek görev: {parameters.get('title')}")
         elif intent == "media_control":
-            print(f"[SİSTEM] Medya kontrolü: {parameters}")
+            os_actions.media_control(parameters.get("action"))
         elif intent == "informational":
             print(f"[SİSTEM] Bilgi araması: {parameters}")
         else:
@@ -213,11 +213,12 @@ if __name__ == "__main__":
 
     # Test senaryoları (Adı ve Kullanıcı Mesajı)
     test_senaryolari = [
-        ("Uygulama Açma", "youtube music uygulamasını açar mısın?"),
-        ("Discord Işınlanma", "Mustafa purna sunucusunda lobi kanalına katıl."),
-        ("Sistem Ses Kontrolü", "Mustafa sistem mikrofonunu kapat."),
-        ("Bağlam Hafızası (Context)", "Şimdi o açtığın uygulamayı geri kapat."),
-        ("Discord İçi Kontrol", "Discord'da mikrofonumu aç.")
+        #("Uygulama Açma", "youtube music uygulamasını açar mısın?"),
+        #("Discord Işınlanma", "Mustafa purna sunucusunda lobi kanalına katıl."),
+        #("Sistem Ses Kontrolü", "Mustafa sistem mikrofonunu kapat."),
+        #("Bağlam Hafızası (Context)", "Şimdi o açtığın uygulamayı geri kapat."),
+        #("Discord İçi Kontrol", "Discord'da mikrofonumu aç."),
+        ("Medya Kontrolü", "Bir şarkıyı çal")
     ]
 
     import time
@@ -228,17 +229,14 @@ if __name__ == "__main__":
         print(f"KULLANICI: {mesaj}")
         print(f"{'-' * 40}")
 
-        # Sadece "local" modda çalıştırarak Llama 3.2'yi sınıyoruz
-        asistan.execute_command(mesaj, mode="cloud")
+        asistan.execute_command(mesaj, mode="local")
 
-        # İşletim sisteminin ve Discord soketinin (IPC) işlemleri
-        # rahatça tamamlayabilmesi için her komut arası 5 saniye bekliyoruz.
-        time.sleep(5)
+        time.sleep(1)
 
     # ==========================================
     # GÜVENLİ ÇIKIŞ (GRACEFUL SHUTDOWN)
     # ==========================================
-    time.sleep(2)
+    time.sleep(1)
     if asistan.ipc and asistan.ipc.connected:
         asistan.ipc.client.close()
         print("\n[SİSTEM] IPC Bağlantısı güvenlice kapatıldı.")
