@@ -452,8 +452,8 @@ def _is_media_playing_windows():
         session = manager.get_current_session()
         if session:
             info = session.get_playback_info()
-            # PlaybackStatus değerleri: 4 = Stopped, 5 = Playing, 6 = Paused
-            return info.playback_status == 5
+            # PlaybackStatus değerleri: 2 = Stopped, 3 = Playing, 4 = Paused
+            return info.playback_status == 4
         return False  # Açık bir medya uygulaması yoksa çalmıyordur
 
         # Fonksiyon asenkron olduğu için anlık (sync) olarak çalıştırıp sonucunu alıyoruz

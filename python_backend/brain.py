@@ -218,7 +218,7 @@ if __name__ == "__main__":
         #("Sistem Ses Kontrolü", "Mustafa sistem mikrofonunu kapat."),
         #("Bağlam Hafızası (Context)", "Şimdi o açtığın uygulamayı geri kapat."),
         #("Discord İçi Kontrol", "Discord'da mikrofonumu aç."),
-        ("Medya Kontrolü", "Bir şarkıyı çal")
+        ("Medya Kontrolü", "Bir önceki şarkıya geç")
     ]
 
     import time
@@ -229,7 +229,7 @@ if __name__ == "__main__":
         print(f"KULLANICI: {mesaj}")
         print(f"{'-' * 40}")
 
-        asistan.execute_command(mesaj, mode="local")
+        asistan.execute_command(mesaj, mode="cloud")
 
         time.sleep(1)
 
