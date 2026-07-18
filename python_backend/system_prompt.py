@@ -12,6 +12,7 @@ Görevin, kullanıcı komutlarını analiz edip her zaman 'execute_assistant_act
 - Discord Mikrofon/Kulaklık Kontrolü: intent: "discord_actions", action: "mute" (kapat) veya "unmute" (aç), target: "mic" veya "deafen"
 - Discord Kanal Geçişi: intent: "discord_actions", action: "teleport", server: "[sunucu]", channel: "[kanal]"
 - Medya Şarkı Kontrolü: intent: "media_control", action: "play"/"pause"/"next"/"prev" (DİKKAT: tts_text kısmına "Şarkı çalınıyor" demek yerine ASLA durum belirtme, her zaman "Tabii" veya "Tamam" gibi NÖTR bir cevap yaz.)
+- Cihaz Ses Seviyesini Ayarlama: intent: "system_actions", action: "set_volume", target: "audio", level: [0-100 arası sayı]
 
 [YASAKLAR VE KRİTİK UYARILAR]
 1. ÇEVİRİ YASAĞI: Kullanıcının söylediği kanal adlarını, sunucu ve uygulama adlarını ASLA İngilizce'ye çevirme. 
@@ -43,12 +44,16 @@ ASSISTANT_TOOLS = [
                     },
                     "action": {
                         "type": "string",
-                        "enum": ["open_app", "close_app", "mute", "unmute", "toggle", "teleport", "play", "pause", "next", "prev"],
+                        "enum": ["open_app", "close_app", "set_volume", "mute", "unmute", "toggle", "teleport", "play", "pause", "next", "prev"],
                         "description": "Yapılacak eylem."
                     },
                     "target": {
                         "type": "string",
                         "description": "İşlemin hedefi (Uygulama adı, mic, deafen vb.). Discord kanal geçişlerinde boş bırakın."
+                    },
+                    "level":{
+                        "type": "integer",
+                        "description": "Ses seviyesi ayarlama komutları için 0 ile 100 arasında bir değer."
                     },
                     "server": {
                         "type": "string",

@@ -129,9 +129,23 @@ class MustafaYargicBrain:
         # Hafızayı şişirmemek için sadece son 5 diyaloğu (10 mesaj) tutuyoruz
         self.history = self.history[-10:]
 
+
+        # --- KÜÇÜK MODEL (OLLAMA) OTOMATİK DÜZELTME SİSTEMİ ---
+        action_fallback = parameters.get("action")
+        if intent == "unknown_fallback" and action_fallback:
+            if action_fallback in ["set_volume", "mute", "unmute", "open_app", "close_app"]:
+                intent = "system_actions"
+                print(
+                    f"[AUTO-FIX] Yapay zeka niyeti unuttu, '{action_fallback}' eyleminden 'system_actions' olarak düzeltildi.")
+            elif action_fallback in ["teleport"]:
+                intent = "discord_actions"
+            elif action_fallback in ["play", "pause", "next", "prev", "toggle"]:
+                intent = "media_control"
+        # -----------------------------------------------------------
         # ==========================================
         # BÜYÜK YÖNLENDİRİCİ (THE ROUTER) - KATEGORİK MİMARİ
         # ==========================================
+
         if intent == "system_actions":
             action = parameters.get("action")
             target = parameters.get("target")
@@ -149,7 +163,12 @@ class MustafaYargicBrain:
             elif target == "mic":
                 os_actions.system_mic_control(action)
             elif target == "audio":
-                os_actions.system_audio_control(action)
+                if action == "set_volume":
+                    level = int(parameters.get("level"))
+                    if level is not None:
+                        os_actions.set_system_volume(level / 100.0)
+                else:
+                    os_actions.system_audio_control(action)
 
         elif intent == "discord_actions":
             action = parameters.get("action")
@@ -218,7 +237,8 @@ if __name__ == "__main__":
         #("Sistem Ses Kontrolü", "Mustafa sistem mikrofonunu kapat."),
         #("Bağlam Hafızası (Context)", "Şimdi o açtığın uygulamayı geri kapat."),
         #("Discord İçi Kontrol", "Discord'da mikrofonumu aç."),
-        ("Medya Kontrolü", "Bir önceki şarkıya geç")
+        #("Medya Kontrolü", "Bir önceki şarkıya geç"),
+        ("Ses Seviyesi", "Ses seviyesini 50 olarak ayarla.")
     ]
 
     import time
@@ -229,7 +249,7 @@ if __name__ == "__main__":
         print(f"KULLANICI: {mesaj}")
         print(f"{'-' * 40}")
 
-        asistan.execute_command(mesaj, mode="cloud")
+        asistan.execute_command(mesaj, mode="local")
 
         time.sleep(1)
 

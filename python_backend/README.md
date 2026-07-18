@@ -1,0 +1,1 @@
+Suanda linux icin varolan sistem ses komutlarinin cogunlugu pipewire ile gelen wireplumber'in terminal komudu olan wpctl ile isleniyor.

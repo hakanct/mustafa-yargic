@@ -86,7 +86,7 @@ def _open_app_windows(app_path, safe_target, target_name_lower):
                 return True
             except FileNotFoundError:
                 print(f"[WINDOWS] '{app_path}' doğrudan bulunamadı, Başlat Menüsü taranıyor...")
-                pass # Hata verirse pes etme, aşağıdaki katmanlara (Katman 2) geç!
+                pass  # Hata verirse pes etme, aşağıdaki katmanlara (Katman 2) geç!
 
     # Katman 2: Başlat Menüsü Kısayolları
     print(f"[WINDOWS] '{safe_target}' Başlat Menüsünde aranıyor...")
@@ -305,7 +305,7 @@ def close_application(target_name):
 # ==========================================
 # DONANIMSAL SES KONTROLLERİ (OS-LEVEL AUDIO)
 # ==========================================
-def _set_windows_audio_mute(is_mic, action):
+def _set_windows_audio(is_mic, action):
     """Windows Core Audio API (pycaw) kullanarak ses aygıtlarını susturur/açar."""
     try:
         import comtypes
@@ -313,35 +313,35 @@ def _set_windows_audio_mute(is_mic, action):
         from comtypes import CLSCTX_ALL
         # Alt sınıflar yerine pycaw'ın ana ve güvenli Utilities sınıfını çağırıyoruz
         from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
-        
+
         # Windows COM API'yi güvenle başlat
         try:
             comtypes.CoInitialize()
         except:
             pass
-            
+
         # Karmaşık ID'ler yerine pycaw'ın yerleşik metodlarını kullanıyoruz
         if is_mic:
             devices = AudioUtilities.GetMicrophone()
         else:
             devices = AudioUtilities.GetSpeakers()
-            
+
         if devices is None:
             print(f"[DONANIM HATA] Hedef ses aygıtı bulunamadı.")
             return False
-        
+
         interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
         volume = cast(interface, POINTER(IAudioEndpointVolume))
-        
+
         current_mute = volume.GetMute()
-        
+
         if action == "mute":
             volume.SetMute(1, None)
         elif action == "unmute":
             volume.SetMute(0, None)
         elif action == "toggle":
             volume.SetMute(0 if current_mute else 1, None)
-            
+
         return True
     except ImportError as e:
         print(f"[DONANIM HATA] İçe aktarma (Import) sorunu: {e}")
@@ -356,13 +356,16 @@ def system_mic_control(action="toggle"):
     try:
         if CURRENT_OS == "Linux":
             val = "toggle"
-            if action == "mute": val = "1"
-            elif action == "unmute": val = "0"
-            subprocess.run(["wpctl", "set-mute", "@DEFAULT_AUDIO_SOURCE@", val], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if action == "mute":
+                val = "1"
+            elif action == "unmute":
+                val = "0"
+            subprocess.run(["wpctl", "set-mute", "@DEFAULT_AUDIO_SOURCE@", val], stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL)
             print(f"[DONANIM] Mikrofon durumu donanımsal olarak değiştirildi (Linux): {action.upper()}")
             return True
         elif CURRENT_OS == "Windows":
-            success = _set_windows_audio_mute(is_mic=True, action=action)
+            success = _set_windows_audio(is_mic=True, action=action)
             if success:
                 print(f"[DONANIM] Windows mikrofon durumu donanımsal değiştirildi: {action.upper()}")
             return success
@@ -376,13 +379,16 @@ def system_audio_control(action="toggle"):
     try:
         if CURRENT_OS == "Linux":
             val = "toggle"
-            if action == "mute": val = "1"
-            elif action == "unmute": val = "0"
-            subprocess.run(["wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", val], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if action == "mute":
+                val = "1"
+            elif action == "unmute":
+                val = "0"
+            subprocess.run(["wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", val], stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL)
             print(f"[DONANIM] Sistem sesi donanımsal olarak değiştirildi (Linux): {action.upper()}")
             return True
         elif CURRENT_OS == "Windows":
-            success = _set_windows_audio_mute(is_mic=False, action=action)
+            success = _set_windows_audio(is_mic=False, action=action)
             if success:
                 print(f"[DONANIM] Windows hoparlör durumu donanımsal değiştirildi: {action.upper()}")
             return success
@@ -390,6 +396,98 @@ def system_audio_control(action="toggle"):
         print(f"[DONANIM] Hoparlör kontrol hatası: {e}")
         return False
 
+
+# ==========================================
+# SİSTEM SES SEVİYESİ KONTROLLERİ
+# ==========================================
+
+_SAVED_SYSTEM_VOLUME = None
+
+
+def _get_system_volume_linux():
+    result = subprocess.run(["wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@"], capture_output=True, text=True)
+    output_text = result.stdout.strip()
+    if not output_text: return None
+
+    match = re.search(r"([\d\.]+)", output_text)
+    if match: return float(match.group(1))
+    return None
+
+
+def get_system_volume():
+    try:
+        if CURRENT_OS == "Linux":
+            return _get_system_volume_linux()
+        elif CURRENT_OS == "Windows":
+            print("Next Update")
+            return None
+    except Exception as e:
+        print(f"[DONANIM] Hoparlör kontrol hatası: {e}")
+        return None
+
+
+def _set_system_volume_linux(target_volume):
+    volume_str = f"{target_volume:.2f}"
+    subprocess.run(["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", volume_str], stdout=subprocess.DEVNULL,
+                   stderr=subprocess.DEVNULL)
+    return True
+
+
+def set_system_volume(target_volume):
+    global _SAVED_SYSTEM_VOLUME
+    try:
+        if CURRENT_OS == "Linux":
+            if _SAVED_SYSTEM_VOLUME is not None:
+                _SAVED_SYSTEM_VOLUME = target_volume
+            else:
+                _set_system_volume_linux(target_volume)
+        elif CURRENT_OS == "Windows":
+            if _SAVED_SYSTEM_VOLUME is not None:
+                _SAVED_SYSTEM_VOLUME = target_volume
+            else:
+                print("Next Update")
+        return True
+    except Exception as e:
+        print(f"[DONANIM] Hoparlör kontrol hatası: {e}")
+        return False
+
+
+# ==========================================
+# DUCKİNG İŞLEMLERİ
+# ==========================================
+
+def start_ducking():
+    """Asistan dinlemeye başladığında (veya konuştuğunda) müziği kısar."""
+    global _SAVED_SYSTEM_VOLUME
+    print("[DUCKING] Ses geçici olarak kısılıyor.")
+
+    current_volume = get_system_volume()
+    if current_volume is None: return False
+
+    if _SAVED_SYSTEM_VOLUME is None:
+        _SAVED_SYSTEM_VOLUME = current_volume
+
+    if CURRENT_OS == "Linux":
+        _set_system_volume_linux(current_volume * 0.30)
+    elif CURRENT_OS == "Windows":
+        print("Next Update")
+
+    return True
+
+
+def stop_ducking():
+    """Asistan sustuğunda (işlem bittiğinde) müziği eski haline döndürür."""
+    global _SAVED_SYSTEM_VOLUME
+    print("[DUCKING] Ses orijinal seviyesine döndürülüyor.")
+
+    if _SAVED_SYSTEM_VOLUME is None:
+        return False
+
+    if CURRENT_OS == "Linux":
+        _set_system_volume_linux(_SAVED_SYSTEM_VOLUME)
+
+    _SAVED_SYSTEM_VOLUME = None
+    return True
 
 
 # ==========================================
@@ -400,6 +498,7 @@ def _media_control_linux(action):
         subprocess.run(["playerctl", action], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except Exception as e:
         print(f"[Linux] Medya kontrol hatası: {e}")
+
 
 def _media_control_windows(action):
     import ctypes
@@ -430,13 +529,14 @@ def _media_control_windows(action):
     vk_code = windows_key_map.get(action)
 
     if vk_code:
-        ctypes.windll.user32.keybd_event(vk_code, 0, 0, 0) # key down
-        ctypes.windll.user32.keybd_event(vk_code, 0, 2, 0) # key up
+        ctypes.windll.user32.keybd_event(vk_code, 0, 0, 0)  # key down
+        ctypes.windll.user32.keybd_event(vk_code, 0, 2, 0)  # key up
         print(f"[WINDOWS] Medya donanım tuşu tetiklendi: {action.upper()}")
         return True
     else:
         print(f"[WINDOWS] Geçersiz medya komutu: {action}")
         return False
+
 
 def _is_media_playing_windows():
     """Windows'ta medyanın aktif olarak çalıp çalmadığını kontrol eder."""
