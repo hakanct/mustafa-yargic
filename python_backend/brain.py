@@ -249,7 +249,7 @@ if __name__ == "__main__":
         print(f"KULLANICI: {mesaj}")
         print(f"{'-' * 40}")
 
-        asistan.execute_command(mesaj, mode="local")
+        asistan.execute_command(mesaj, mode="cloud")
 
         time.sleep(1)
 

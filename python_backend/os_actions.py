@@ -305,47 +305,91 @@ def close_application(target_name):
 # ==========================================
 # DONANIMSAL SES KONTROLLERİ (OS-LEVEL AUDIO)
 # ==========================================
-def _set_windows_audio(is_mic, action):
-    """Windows Core Audio API (pycaw) kullanarak ses aygıtlarını susturur/açar."""
+
+def _get_windows_volume_interface(is_mic=False):
+    """PYCAW KULLANMADAN direkt Windows COM API ile Saf (Native) Ses Kontrolü."""
+    import comtypes
+    from ctypes import POINTER, cast, c_float, c_uint
+    from ctypes.wintypes import DWORD, BOOL
+    from comtypes import IUnknown, GUID, COMMETHOD
+
+    # Windows Ses Çekirdeği Kimlikleri (GUIDs)
+    CLSID_MMDeviceEnumerator = GUID('{BCDE0395-E52F-467C-8E3D-C4579291692E}')
+    
+    class IMMDevice(IUnknown):
+        _iid_ = GUID('{D666063F-1587-4E43-81F1-B948E807363F}')
+        _methods_ = [
+            COMMETHOD([], comtypes.HRESULT, 'Activate',
+                      (['in'], POINTER(GUID), 'iid'),
+                      (['in'], DWORD, 'dwClsCtx'),
+                      (['in'], POINTER(DWORD), 'pActivationParams'),
+                      (['out', 'retval'], POINTER(POINTER(IUnknown)), 'ppInterface'))
+        ]
+
+    class IMMDeviceEnumerator(IUnknown):
+        _iid_ = GUID('{A95664D2-9614-4F35-A746-DE8DB63617E6}')
+        _methods_ = [
+            COMMETHOD([], comtypes.HRESULT, 'EnumAudioEndpoints', (['in'], DWORD), (['in'], DWORD), (['out', 'retval'], POINTER(POINTER(IUnknown)))),
+            COMMETHOD([], comtypes.HRESULT, 'GetDefaultAudioEndpoint',
+                      (['in'], DWORD, 'dataFlow'),
+                      (['in'], DWORD, 'role'),
+                      (['out', 'retval'], POINTER(POINTER(IMMDevice)), 'ppEndpoint'))
+        ]
+
+    class IAudioEndpointVolume(IUnknown):
+        _iid_ = GUID('{5CDF2C82-841E-4546-9722-0CF74078229A}')
+        _methods_ = [
+            COMMETHOD([], comtypes.HRESULT, 'RegisterControlChangeNotify', (['in'], POINTER(IUnknown))),
+            COMMETHOD([], comtypes.HRESULT, 'UnregisterControlChangeNotify', (['in'], POINTER(IUnknown))),
+            COMMETHOD([], comtypes.HRESULT, 'GetChannelCount', (['out', 'retval'], POINTER(c_uint))),
+            COMMETHOD([], comtypes.HRESULT, 'SetMasterVolumeLevel', (['in'], c_float), (['in'], POINTER(GUID))),
+            COMMETHOD([], comtypes.HRESULT, 'SetMasterVolumeLevelScalar', (['in'], c_float, 'fLevel'), (['in'], POINTER(GUID), 'pguidEventContext')),
+            COMMETHOD([], comtypes.HRESULT, 'GetMasterVolumeLevel', (['out', 'retval'], POINTER(c_float))),
+            COMMETHOD([], comtypes.HRESULT, 'GetMasterVolumeLevelScalar', (['out', 'retval'], POINTER(c_float), 'pfLevel')),
+            COMMETHOD([], comtypes.HRESULT, 'SetChannelVolumeLevel', (['in'], c_uint), (['in'], c_float), (['in'], POINTER(GUID))),
+            COMMETHOD([], comtypes.HRESULT, 'SetChannelVolumeLevelScalar', (['in'], c_uint), (['in'], c_float), (['in'], POINTER(GUID))),
+            COMMETHOD([], comtypes.HRESULT, 'GetChannelVolumeLevel', (['in'], c_uint), (['out', 'retval'], POINTER(c_float))),
+            COMMETHOD([], comtypes.HRESULT, 'GetChannelVolumeLevelScalar', (['in'], c_uint), (['out', 'retval'], POINTER(c_float))),
+            COMMETHOD([], comtypes.HRESULT, 'SetMute', (['in'], BOOL, 'bMute'), (['in'], POINTER(GUID), 'pguidEventContext')),
+            COMMETHOD([], comtypes.HRESULT, 'GetMute', (['out', 'retval'], POINTER(BOOL), 'pbMute'))
+        ]
+
     try:
-        import comtypes
-        from ctypes import cast, POINTER
-        from comtypes import CLSCTX_ALL
-        # Alt sınıflar yerine pycaw'ın ana ve güvenli Utilities sınıfını çağırıyoruz
-        from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+        comtypes.CoInitialize()
+        enumerator = comtypes.CoCreateInstance(
+            CLSID_MMDeviceEnumerator,
+            IMMDeviceEnumerator,
+            comtypes.CLSCTX_INPROC_SERVER
+        )
+        
+        # eRender = 0 (Hoparlör), eCapture = 1 (Mikrofon), eMultimedia = 1
+        data_flow = 1 if is_mic else 0
+        endpoint = enumerator.GetDefaultAudioEndpoint(data_flow, 1)
+        
+        # 23 = CLSCTX_ALL
+        interface = endpoint.Activate(IAudioEndpointVolume._iid_, 23, None)
+        return cast(interface, POINTER(IAudioEndpointVolume))
+    except Exception as e:
+        print(f"[WINDOWS SES HATA] Native COM Arayüzü başlatılamadı: {e}")
+        return None
 
-        # Windows COM API'yi güvenle başlat
-        try:
-            comtypes.CoInitialize()
-        except:
-            pass
 
-        # Karmaşık ID'ler yerine pycaw'ın yerleşik metodlarını kullanıyoruz
-        if is_mic:
-            devices = AudioUtilities.GetMicrophone()
-        else:
-            devices = AudioUtilities.GetSpeakers()
-
-        if devices is None:
-            print(f"[DONANIM HATA] Hedef ses aygıtı bulunamadı.")
-            return False
-
-        interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
-        volume = cast(interface, POINTER(IAudioEndpointVolume))
-
+def _set_windows_audio(is_mic, action):
+    """Windows mikrofon/hoparlör tamamen susturur veya açar."""
+    try:
+        volume = _get_windows_volume_interface(is_mic)
+        if not volume: return False
+        
         current_mute = volume.GetMute()
-
+        
         if action == "mute":
             volume.SetMute(1, None)
         elif action == "unmute":
             volume.SetMute(0, None)
         elif action == "toggle":
             volume.SetMute(0 if current_mute else 1, None)
-
+            
         return True
-    except ImportError as e:
-        print(f"[DONANIM HATA] İçe aktarma (Import) sorunu: {e}")
-        return False
     except Exception as e:
         print(f"[DONANIM HATA] Windows ses kontrolü başarısız: {e}")
         return False
@@ -414,13 +458,23 @@ def _get_system_volume_linux():
     return None
 
 
+def _get_system_volume_windows():
+    """Windows'ta master ses seviyesini okur (0.0 - 1.0 arası)."""
+    try:
+        volume = _get_windows_volume_interface(is_mic=False)
+        if not volume: return None
+        return volume.GetMasterVolumeLevelScalar()
+    except Exception as e:
+        print(f"[WINDOWS SES HATA] Ses okuma başarısız: {e}")
+        return None
+
+
 def get_system_volume():
     try:
         if CURRENT_OS == "Linux":
             return _get_system_volume_linux()
         elif CURRENT_OS == "Windows":
-            print("Next Update")
-            return None
+            return _get_system_volume_windows()
     except Exception as e:
         print(f"[DONANIM] Hoparlör kontrol hatası: {e}")
         return None
@@ -431,6 +485,21 @@ def _set_system_volume_linux(target_volume):
     subprocess.run(["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", volume_str], stdout=subprocess.DEVNULL,
                    stderr=subprocess.DEVNULL)
     return True
+
+
+def _set_system_volume_windows(target_volume):
+    """Windows'ta master ses seviyesini ayarlar."""
+    try:
+        volume = _get_windows_volume_interface(is_mic=False)
+        if not volume: return False
+        
+        # Olası çökmeleri engellemek için değeri 0.0 ile 1.0 aralığına zorla
+        safe_volume = max(0.0, min(1.0, float(target_volume)))
+        volume.SetMasterVolumeLevelScalar(safe_volume, None)
+        return True
+    except Exception as e:
+        print(f"[WINDOWS SES HATA] Ses ayarlama başarısız: {e}")
+        return False
 
 
 def set_system_volume(target_volume):
@@ -445,7 +514,7 @@ def set_system_volume(target_volume):
             if _SAVED_SYSTEM_VOLUME is not None:
                 _SAVED_SYSTEM_VOLUME = target_volume
             else:
-                print("Next Update")
+                _set_system_volume_windows(target_volume)
         return True
     except Exception as e:
         print(f"[DONANIM] Hoparlör kontrol hatası: {e}")
@@ -470,7 +539,7 @@ def start_ducking():
     if CURRENT_OS == "Linux":
         _set_system_volume_linux(current_volume * 0.30)
     elif CURRENT_OS == "Windows":
-        print("Next Update")
+        _set_system_volume_windows(current_volume * 0.30)
 
     return True
 
@@ -485,6 +554,8 @@ def stop_ducking():
 
     if CURRENT_OS == "Linux":
         _set_system_volume_linux(_SAVED_SYSTEM_VOLUME)
+    elif CURRENT_OS == "Windows":
+        _set_system_volume_windows(_SAVED_SYSTEM_VOLUME)
 
     _SAVED_SYSTEM_VOLUME = None
     return True
@@ -556,8 +627,6 @@ def _is_media_playing_windows():
             return info.playback_status == 4
         return False  # Açık bir medya uygulaması yoksa çalmıyordur
 
-        # Fonksiyon asenkron olduğu için anlık (sync) olarak çalıştırıp sonucunu alıyoruz
-
     return asyncio.run(get_status())
 
 
@@ -581,7 +650,8 @@ def media_control(action="toggle"):
 
 # --- TEST ALANI ---
 if __name__ == "__main__":
-    open_application("youtube music")
+    pass
+    # open_application("youtube music")
     # close_application("youtube music")
-    # system_mute_toggle()
-    # system_deafen_toggle()
+    # system_mic_control("toggle")
+    # system_audio_control("toggle")
