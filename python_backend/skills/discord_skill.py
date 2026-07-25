@@ -66,24 +66,28 @@ def _focus_discord():
 # KLAVYE ŞELALESİ (THE KEYBOARD WATERFALL)
 # ==========================================
 def _send_keys_waterfall(search_query):
-    """
-    Klavye otomasyonunu katman katman dener.
-    Biri başarısız olursa diğerine geçer. Hiçbiri çalışmazsa False döner.
-    """
+    import os
 
-    # KATMAN 1: PyAutoGUI (Windows, Linux X11)
-    try:
-        import pyautogui
-        import pyperclip
-        pyautogui.hotkey('ctrl', 'k')
-        time.sleep(0.5)
-        pyperclip.copy(search_query)
-        pyautogui.hotkey('ctrl', 'v')
-        time.sleep(1.2)
-        pyautogui.press('enter')
-        return True
-    except Exception as e:
-        print(f"[ŞELALE] PyAutoGUI başarısız oldu veya engellendi: {e}")
+    # Wayland ortamında mıyız? (Niri, Hyprland, Sway vb.)
+    session_type = os.environ.get("XDG_SESSION_TYPE", "").lower()
+    is_wayland = session_type == "wayland" or "wayland" in os.environ.get("WAYLAND_DISPLAY", "").lower()
+
+    # KATMAN 1: PyAutoGUI (Sadece Windows veya Linux X11 ise)
+    if not is_wayland:
+        try:
+            import pyautogui
+            import pyperclip
+            pyautogui.hotkey('ctrl', 'k')
+            time.sleep(0.5)
+            pyperclip.copy(search_query)
+            pyautogui.hotkey('ctrl', 'v')
+            time.sleep(1.2)
+            pyautogui.press('enter')
+            return True
+        except Exception as e:
+            print(f"[ŞELALE] PyAutoGUI başarısız oldu veya engellendi: {e}")
+    else:
+        print("[ŞELALE] Wayland ortamı (Niri) tespit edildi. PyAutoGUI pas geçiliyor.")
 
     # KATMAN 2 & 3: Wayland Özel Araçları (Sadece Linux)
     if CURRENT_OS == "Linux":
@@ -103,7 +107,6 @@ def _send_keys_waterfall(search_query):
         # Katman 3: ydotool (Hardware Level Wayland)
         try:
             print("[ŞELALE] ydotool deneniyor (sudo gerekebilir)...")
-            # 29: LCtrl, 37: K, 28: Enter
             subprocess.run(["ydotool", "key", "29:1", "37:1", "37:0", "29:0"], check=True, stdout=subprocess.DEVNULL,
                            stderr=subprocess.DEVNULL)
             time.sleep(0.5)
@@ -116,10 +119,8 @@ def _send_keys_waterfall(search_query):
         except Exception as e:
             print(f"[ŞELALE] ydotool başarısız oldu: {e}")
 
-    # Bütün katmanlar çökerse False döndür (Beyin bu durumda kullanıcıdan tıklamasını isteyecek)
-    print("[ŞELALE] TÜM KLAVYE SİMÜLASYONLARI BAŞARISIZ! Yetki veya destek yok.")
+    print("[ŞELALE] TÜM KLAVYE SİMÜLASYONLARI BAŞARISIZ! Manuel öğrenme moduna geçiliyor.")
     return False
-
 
 # ==========================================
 # EVRENSEL TRAFİK POLİSLERİ (YÖNLENDİRİCİLER)
