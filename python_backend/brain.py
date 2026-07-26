@@ -1,7 +1,8 @@
 import os
 import json
-import re  # YENİ: Regex güvenlik süzgeci için eklendi
-from time import sleep
+import re
+import time
+import asyncio  # YENİ: Asenkron işlemler için
 
 from groq import Groq
 import ollama
@@ -32,13 +33,13 @@ class MustafaYargicBrain:
         self.system_prompt_text = system_prompt.get_system_prompt(self.enable_discord)
         self.assistant_tools = system_prompt.get_assistant_tools(self.enable_discord)
 
-        # Discord Modülü açıksa IPC soketini başlat, kapalıysa hiç yorma!
+        # Discord Modülü açıksa IPC sınıfını tanımla ama BAĞLANMA! (Kalp Atışı görevi üstlenecek)
         if self.enable_discord:
             client_id = os.getenv("DISCORD_CLIENT_ID")
             client_secret = os.getenv("DISCORD_CLIENT_SECRET")
             if client_id and client_secret:
                 self.ipc = discord_ipc.DiscordIPC(client_id, client_secret)
-                self.ipc.connect()
+                # DİKKAT: self.ipc.connect() satırı buradan silindi!
             else:
                 self.ipc = None
                 print("[SİSTEM UYARISI] Discord kimlik bilgileri eksik, IPC başlatılamadı.")
@@ -142,7 +143,8 @@ class MustafaYargicBrain:
         if intent == "unknown_fallback" and action_fallback:
             if action_fallback in ["set_volume", "mute", "unmute", "open_app", "close_app"]:
                 intent = "system_actions"
-                print(f"[AUTO-FIX] Yapay zeka niyeti unuttu, '{action_fallback}' eyleminden 'system_actions' olarak düzeltildi.")
+                print(
+                    f"[AUTO-FIX] Yapay zeka niyeti unuttu, '{action_fallback}' eyleminden 'system_actions' olarak düzeltildi.")
             elif action_fallback in ["teleport"] and self.enable_discord:
                 intent = "discord_actions"
             elif action_fallback in ["play", "pause", "next", "prev", "toggle"]:
@@ -189,7 +191,7 @@ class MustafaYargicBrain:
             target = parameters.get("target")
 
             if not self.ipc or not self.ipc.connected:
-                print("[SİSTEM] Discord arka kapısı (IPC) kapalı! Bağlantıyı kontrol edin.")
+                print("[SİSTEM UYARISI] Discord arka kapısı (IPC) kapalı! Bağlantıyı kontrol edin.")
                 return
 
             if action == "teleport":
@@ -205,13 +207,15 @@ class MustafaYargicBrain:
 
                     if success:
                         print("[SİSTEM] Klavye otomasyonu başarılı! Otonom IPC kaydı için pusuya yatıldı...")
-                        import asyncio
-                        for _ in range(20):
+                        # 4 saniye yerine 8 saniye bekliyor ve ana thread'i boğmuyor (os_actions'ta düzeltilmişti)
+                        for _ in range(40):
                             if self.ipc.last_seen_channel_id:
                                 break
-                            self.ipc.client.loop.run_until_complete(asyncio.sleep(0.2))
+                            time.sleep(0.2)
+
                         if self.ipc.last_seen_channel_id:
-                            print(f"[SİSTEM] BİNGO! '{channel}' kanalının gizli ID'si yakalandı ve kalıcı hafızaya eklendi.")
+                            print(
+                                f"[SİSTEM] BİNGO! '{channel}' kanalının gizli ID'si yakalandı ve kalıcı hafızaya eklendi.")
                             self.ipc.update_cache(server, "genel", channel, self.ipc.last_seen_channel_id, "voice")
                         else:
                             print("[SİSTEM UYARISI] Kanala girildi ancak Discord IPC ID'yi yakalayamadı.")
@@ -234,43 +238,72 @@ class MustafaYargicBrain:
         else:
             print("[SİSTEM] Bilinmeyen niyet veya eylem: ", intent_data)
 
+    # ==========================================
+    # FAZ 8: ASENKRON DÖNGÜ VE KALP ATIŞI
+    # ==========================================
+    async def _discord_heartbeat(self):
+        """Her 60 saniyede bir sessizce Discord'un açık olup olmadığını kontrol eder."""
+        if not self.enable_discord or not self.ipc:
+            return
 
-# --- UÇTAN UCA TEST ALANI ---
+        print("[HEARTBEAT] Discord otonom tarayıcısı aktif edildi. (60 saniyede bir aranacak)")
+        while True:
+            if not self.ipc.connected:
+                # Ana asenkron döngüyü kitlememek için bağlantı işçisini thread'e atıyoruz
+                success = await asyncio.to_thread(self.ipc.connect)
+                if success:
+                    print("\n[HEARTBEAT] BİNGO! Discord açıldı ve arka kapıdan sızıldı.")
+
+            # Her kontrol arası 60 saniye dinlen
+            await asyncio.sleep(60)
+
+    async def run(self):
+        """Asistanın hiç kapanmayan Ana Döngüsü (Event Loop)"""
+        print("=" * 60)
+        print("🚀 MUSTAFA YARGIÇ - OTONOM ASENKRON DÖNGÜ BAŞLADI 🚀")
+        print("=" * 60)
+
+        # Heartbeat (Kalp atışı) görevini ana döngüye dahil edip arka planda çalışmaya bırakıyoruz
+        if self.enable_discord and self.ipc:
+            asyncio.create_task(self._discord_heartbeat())
+
+        # Sürekli dinleme (Terminal giriş) döngüsü
+        while True:
+            try:
+                # Kullanıcıdan input alırken de asenkron bekleme yapıyoruz ki Heartbeat arkada tıkır tıkır çalışsın
+                try:
+                    user_message = await asyncio.to_thread(input, "\n[SİZ]: ")
+                except UnicodeDecodeError:
+                    # Arka plan yazıları terminal buffer'ını bozarsa sessizce pas geç
+                    continue
+
+                if not user_message.strip():
+                    continue
+
+                # --- LLM'E GİTMEDEN ÖNCEKİ LOKAL GÜVENLİK KONTROLÜ ---
+                komut = user_message.strip().lower()
+                if komut in ["/bye", "/exit", "çıkış", "kapat", "exit"]:
+                    print("\n[SİSTEM] Güvenli çıkış yapılıyor. Görüşmek üzere efendim!")
+                    break
+
+                # LLM işlemini ve aksiyonları ayrı bir iş parçacığında çalıştır
+                await asyncio.to_thread(self.execute_command, user_message, "cloud")
+
+            except (KeyboardInterrupt, EOFError):
+                print("\n[SİSTEM] Döngü manuel olarak sonlandırıldı.")
+                break
+            except Exception as e:
+                print(f"\n[SİSTEM HATA] Ana döngüde beklenmedik hata: {e}")
+
+# --- OTONOM BAŞLATICI ---
 if __name__ == "__main__":
     asistan = MustafaYargicBrain()
 
-    print("=" * 60)
-    print("🚀 MUSTAFA YARGIÇ - BÜYÜK YEREL (LOCAL) SİSTEM TESTİ 🚀")
-    print("=" * 60)
-
-    # Test senaryoları (Adı ve Kullanıcı Mesajı)
-    test_senaryolari = [
-        #("Uygulama Açma", "youtube music uygulamasını açar mısın?"),
-        ("Discord Işınlanma", "Mustafa purna sunucusunda lobi kanalına katıl."),
-        #("Sistem Ses Kontrolü", "Mustafa sistem mikrofonunu kapat."),
-        #("Bağlam Hafızası (Context)", "Şimdi o açtığın uygulamayı geri kapat."),
-        #("Discord İçi Kontrol", "Discord'da mikrofonumu aç."),
-        #("Medya Kontrolü", "Bir önceki şarkıya geç"),
-        #("Ses Seviyesi", "Ses seviyesini 50 olarak ayarla.")
-    ]
-
-    import time
-
-    for test_adi, mesaj in test_senaryolari:
-        print(f"\n{'-' * 40}")
-        print(f"[TEST: {test_adi.upper()}]")
-        print(f"KULLANICI: {mesaj}")
-        print(f"{'-' * 40}")
-
-        asistan.execute_command(mesaj, mode="cloud")
-
-        time.sleep(1)
-
-    # ==========================================
-    # GÜVENLİ ÇIKIŞ (GRACEFUL SHUTDOWN)
-    # ==========================================
-    time.sleep(1)
-    if asistan.ipc and asistan.ipc.connected:
-        asistan.ipc.client.close()
-        print("\n[SİSTEM] IPC Bağlantısı güvenlice kapatıldı.")
-    print("\n[SİSTEM] BÜYÜK SINAV BAŞARIYLA TAMAMLANDI!")
+    try:
+        # Asenkron dünyayı başlatıyoruz!
+        asyncio.run(asistan.run())
+    finally:
+        # Program kapandığında açık olan tüm soketleri temizle
+        if asistan.ipc and asistan.ipc.connected:
+            asistan.ipc.client.close()
+            print("\n[SİSTEM] IPC Bağlantısı güvenlice kapatıldı.")
