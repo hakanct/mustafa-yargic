@@ -16,7 +16,8 @@ Görevin, kullanıcı komutlarını analiz edip her zaman 'execute_assistant_act
     if enable_discord:
         prompt += """
 - Discord Mikrofon/Kulaklık Kontrolü: intent: "discord_actions", action: "mute" (kapat) veya "unmute" (aç), target: "mic" veya "deafen"
-- Discord Kanal Geçişi: intent: "discord_actions", action: "teleport", server: "[sunucu]", channel: "[kanal]" """
+- Discord Kanal Geçişi: intent: "discord_actions", action: "teleport", server: "[sunucu]", channel: "[kanal]"
+- Discord Sesli Kanaldan Ayrılma: intent: "discord_actions", action: "leave", target: "voice" """
 
     prompt += """
 
@@ -62,7 +63,7 @@ def get_assistant_tools(enable_discord=True):
                         },
                         "action": {
                             "type": "string",
-                            "enum": ["open_app", "close_app", "set_volume", "mute", "unmute", "toggle", "teleport", "play", "pause", "next", "prev"],
+                            "enum": ["open_app", "close_app", "set_volume", "mute", "unmute", "toggle", "teleport", "leave", "play", "pause", "next", "prev"],
                             "description": "Yapılacak eylem."
                         },
                         "target": {

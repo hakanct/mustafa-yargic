@@ -224,6 +224,9 @@ class MustafaYargicBrain:
                         print("[SİSTEM] Klavye engellendi veya başarısız. Etkileşimli öğrenme moduna geçiliyor...")
                         self.ipc.learn_channel_interactive(server, channel)
 
+            elif action == "leave":
+                self.ipc.disconnect_voice()
+
             elif target == "mic":
                 self.ipc.control_mic(action)
             elif target == "deafen":

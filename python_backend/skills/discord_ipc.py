@@ -211,6 +211,25 @@ class DiscordIPC:
             print("\n[MUSTAFA YARGIÇ HATA] Zaman aşımı. Herhangi bir kanala tıklamadınız.")
             return {"status": "timeout"}
 
+    def disconnect_voice(self):
+        """Kullanıcıyı bulunduğu sesli kanaldan çıkarır (Disconnect)."""
+        if not self.connected: return False
+
+        # Vesktop/Vencord RPC'si 'null' komutunu desteklemediği için Linux'ta sistemi çökertmemesi adına engelliyoruz.
+        if platform.system() == "Linux":
+            print("\n[DİSCORD IPC UYARISI] Linux (Vesktop) RPC'si kanaldan otonom ayrılmayı desteklemiyor!")
+            print(
+                "[MUSTAFA YARGIÇ] Efendim, kullandığınız Linux Discord istemcisinin teknik bir kısıtlaması nedeniyle sizi kanaldan çıkaramıyorum. Manuel ayrılmanız gerekiyor.")
+            return False
+
+        try:
+            self.client.select_voice_channel(None)
+            print("[DİSCORD IPC] Sesli kanaldan başarıyla ayrıldı.")
+            return True
+        except Exception as e:
+            print(f"[DİSCORD IPC HATA] Sesli kanaldan ayrılamadı: {e}")
+            return False
+
     # --- BAĞLANTI VE OAUTH2 ---
     def connect(self):
         try:
