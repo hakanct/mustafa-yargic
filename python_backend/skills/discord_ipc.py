@@ -127,16 +127,24 @@ class DiscordIPC:
         if not self.connected: return {"status": "error", "message": "Bağlantı yok"}
 
         cache = self._load_json(CACHE_FILE)
-        target_srv = server_name.lower()
-        target_ch = channel_name.lower()
+
+        # YENİ: Sesli komutlardaki (STT) boşluk varyasyonlarını yoksaymak için normalize ediyoruz
+        target_srv_norm = server_name.lower().replace(" ", "")
+        target_ch_norm = channel_name.lower().replace(" ", "")
 
         matches = []
 
         for srv, categories in cache.items():
-            if target_srv in srv or srv in target_srv:
+            # Önbellekteki sunucu adını da boşluksuz hale getirip karşılaştırıyoruz
+            srv_norm = srv.lower().replace(" ", "")
+
+            if target_srv_norm in srv_norm or srv_norm in target_srv_norm:
                 for cat, channels in categories.items():
                     for ch, data in channels.items():
-                        if target_ch in ch or ch in target_ch:
+                        # Önbellekteki kanal adını da boşluksuz hale getirip karşılaştırıyoruz
+                        ch_norm = ch.lower().replace(" ", "")
+
+                        if target_ch_norm in ch_norm or ch_norm in target_ch_norm:
                             matches.append({
                                 "server": srv, "category": cat, "channel": ch,
                                 "id": data["id"], "type": data.get("type", "text"),
@@ -162,7 +170,8 @@ class DiscordIPC:
                 else:
                     self.client.select_text_channel(best_match["id"])
 
-                self.update_cache(best_match["server"], best_match["category"], best_match["channel"], best_match["id"], best_match["type"])
+                self.update_cache(best_match["server"], best_match["category"], best_match["channel"], best_match["id"],
+                                  best_match["type"])
 
                 return {"status": "success", "channel": best_match["channel"]}
 
@@ -170,7 +179,8 @@ class DiscordIPC:
                 if "5003" in str(e):
                     print(f"[DİSCORD IPC] Zaten '{best_match['channel']}' kanalındasınız!")
 
-                    self.update_cache(best_match["server"], best_match["category"], best_match["channel"], best_match["id"], best_match["type"])
+                    self.update_cache(best_match["server"], best_match["category"], best_match["channel"],
+                                      best_match["id"], best_match["type"])
 
                     return {"status": "success", "channel": best_match["channel"]}
 

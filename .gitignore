@@ -10,6 +10,7 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+*test_scripts.py
 
 # Gizli API Anahtarları ve Çevre Değişkenleri (ÇOK KRİTİK)
 .env

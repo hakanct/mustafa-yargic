@@ -11,6 +11,7 @@ import os_actions
 import skills.discord_skill as discord_skill
 import skills.discord_ipc as discord_ipc
 import system_prompt
+from tts_engine import speak
 
 # .env dosyasındaki ortam değişkenlerini yükler
 load_dotenv()
@@ -138,6 +139,8 @@ class MustafaYargicBrain:
         self.history.append({"role": "assistant", "content": tts_text})
         self.history = self.history[-10:]
 
+        asyncio.run(speak(tts_text))
+
         # --- KÜÇÜK MODEL (OLLAMA) OTOMATİK DÜZELTME SİSTEMİ ---
         action_fallback = parameters.get("action")
         if intent == "unknown_fallback" and action_fallback:
@@ -145,10 +148,33 @@ class MustafaYargicBrain:
                 intent = "system_actions"
                 print(
                     f"[AUTO-FIX] Yapay zeka niyeti unuttu, '{action_fallback}' eyleminden 'system_actions' olarak düzeltildi.")
-            elif action_fallback in ["teleport"] and self.enable_discord:
+            elif action_fallback in ["teleport", "join", "leave"] and self.enable_discord:
                 intent = "discord_actions"
             elif action_fallback in ["play", "pause", "next", "prev", "toggle"]:
                 intent = "media_control"
+
+        # YENİ: Lokal Model Discord Halüsinasyonlarını Temizleme Kalkanı
+        if intent == "discord_actions":
+            # 1. Model action uydurursa veya kafası karışırsa zorla düzelt
+            if parameters.get("action") in ["join", "connect", "katıl"]:
+                parameters["action"] = "teleport"
+                print("[AUTO-FIX] Uydurulan 'join' eylemi 'teleport' olarak düzeltildi.")
+
+            if parameters.get("action") == "teleport":
+                c_val = parameters.get("channel", "")
+                t_val = parameters.get("target", "")
+
+                # 2. Model açıklamayı kopyalayıp değer sanarsa ("kanal adı")
+                if c_val.lower() == "kanal adı" or c_val.lower() == "sunucu adı":
+                    parameters["channel"] = ""
+                    c_val = ""
+                    print("[AUTO-FIX] Model açıklamayı kopyaladı, temizlendi.")
+
+                # 3. Model kanalı yanlışlıkla 'target' içine yazdıysa
+                if not c_val and t_val and t_val not in ["mic", "deafen", "voice", "audio"]:
+                    parameters["channel"] = t_val
+                    parameters["target"] = ""
+                    print(f"[AUTO-FIX] Hedefteki kanal ismi doğru yere taşındı: '{t_val}'")
         # -----------------------------------------------------------
 
         # ==========================================
@@ -263,40 +289,53 @@ class MustafaYargicBrain:
     async def run(self):
         """Asistanın hiç kapanmayan Ana Döngüsü (Event Loop)"""
         print("=" * 60)
-        print("🚀 MUSTAFA YARGIÇ - OTONOM ASENKRON DÖNGÜ BAŞLADI 🚀")
+        print("🚀 MUSTAFA YARGIÇ - SESLİ ASENKRON DÖNGÜ BAŞLADI 🚀")
         print("=" * 60)
 
         # Heartbeat (Kalp atışı) görevini ana döngüye dahil edip arka planda çalışmaya bırakıyoruz
         if self.enable_discord and self.ipc:
             asyncio.create_task(self._discord_heartbeat())
 
-        # Sürekli dinleme (Terminal giriş) döngüsü
+        # Ses Motorunu (Kulakları) Başlat
+        from voice_engine import VoiceEngine
+        self.voice = VoiceEngine()
+
+        # Sürekli dinleme döngüsü
         while True:
             try:
-                # Kullanıcıdan input alırken de asenkron bekleme yapıyoruz ki Heartbeat arkada tıkır tıkır çalışsın
-                try:
-                    user_message = await asyncio.to_thread(input, "\n[SİZ]: ")
-                except UnicodeDecodeError:
-                    # Arka plan yazıları terminal buffer'ını bozarsa sessizce pas geç
-                    continue
+                # 1. Aşama: Sadece "Mustafa" kelimesini bekle (Arka planda bloklamadan çalışır)
+                woke_up = await asyncio.to_thread(self.voice.listen_for_wake_word)
 
-                if not user_message.strip():
-                    continue
+                if woke_up:
+                    # 2. Aşama: Uyanır uyanmaz sistem sesini %30'a kıs (Ducking)
+                    os_actions.start_ducking()
 
-                # --- LLM'E GİTMEDEN ÖNCEKİ LOKAL GÜVENLİK KONTROLÜ ---
-                komut = user_message.strip().lower()
-                if komut in ["/bye", "/exit", "çıkış", "kapat", "exit"]:
-                    print("\n[SİSTEM] Güvenli çıkış yapılıyor. Görüşmek üzere efendim!")
-                    break
+                    # 3. Aşama: Komutu dinle ve metne çevir
+                    user_message = await asyncio.to_thread(self.voice.record_and_transcribe)
 
-                # LLM işlemini ve aksiyonları ayrı bir iş parçacığında çalıştır
-                await asyncio.to_thread(self.execute_command, user_message, "cloud")
+                    if user_message:
+                        import string
+                        clean_msg = user_message.translate(str.maketrans('', '', string.punctuation)).lower().strip()
+
+                        # DÜZELTİLDİ: Artık temizlenmiş olan clean_msg değişkenini kontrol ediyoruz
+                        if clean_msg in ["kapat", "çıkış", "sistemi kapat", "kendini kapat", "exit", "bye"]:
+                            print("\n[SİSTEM] Güvenli çıkış yapılıyor. Görüşmek üzere efendim!")
+                            os_actions.stop_ducking()
+                            break
+
+                        # 4. Aşama: Gelen sesi bulut/lokal LLM'e gönder ve eylemi yap
+                        await asyncio.to_thread(self.execute_command, user_message, "cloud")
+
+                    # 5. Aşama: İşlem bitince müziğin sesini eski orijinal seviyesine geri getir
+                    os_actions.stop_ducking()
 
             except (KeyboardInterrupt, EOFError):
                 print("\n[SİSTEM] Döngü manuel olarak sonlandırıldı.")
+                os_actions.stop_ducking()
                 break
             except Exception as e:
                 print(f"\n[SİSTEM HATA] Ana döngüde beklenmedik hata: {e}")
+                os_actions.stop_ducking()
 
 # --- OTONOM BAŞLATICI ---
 if __name__ == "__main__":

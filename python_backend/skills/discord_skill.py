@@ -40,13 +40,24 @@ def _focus_discord_windows():
 
 
 def _focus_discord_linux():
+    import os
     print("[LINUX] Discord (Vesktop) penceresi odaklanıyor...")
+
+    session_type = os.environ.get("XDG_SESSION_TYPE", "").lower()
+    is_wayland = session_type == "wayland" or "wayland" in os.environ.get("WAYLAND_DISPLAY", "").lower()
+
+    if is_wayland:
+        print("[LINUX UYARISI] Wayland ortamında (Niri vb.) güvenli pencere odaklama garantisi yok.")
+        print("[LINUX UYARISI] Yanlış pencereye yazı yazılmasını önlemek için klavye otomasyonu atlanıyor.")
+        return False  # False döndürerek sistemi otonom olarak etkileşimli öğrenmeye (manuel tıklamaya) itiyoruz.
+
     try:
-        # wmctrl çalışırsa pencere öne gelir, çalışmazsa sessizce pas geçer
+        # wmctrl çalışırsa pencere öne gelir (Sadece X11 / Plasma vb. için)
         subprocess.run(["wmctrl", "-a", "discord"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         subprocess.run(["wmctrl", "-a", "vesktop"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except:
-        pass
+        return False
+
     time.sleep(0.8)
     return True
 
