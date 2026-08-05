@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import re
 import time
@@ -286,7 +287,7 @@ class MustafaYargicBrain:
             # Her kontrol arası 60 saniye dinlen
             await asyncio.sleep(60)
 
-    async def run(self):
+    async def run(self, text_mode=False):
         """Asistanın hiç kapanmayan Ana Döngüsü (Event Loop)"""
         print("=" * 60)
         print("🚀 MUSTAFA YARGIÇ - SESLİ ASENKRON DÖNGÜ BAŞLADI 🚀")
@@ -296,54 +297,76 @@ class MustafaYargicBrain:
         if self.enable_discord and self.ipc:
             asyncio.create_task(self._discord_heartbeat())
 
-        # Ses Motorunu (Kulakları) Başlat
-        from voice_engine import VoiceEngine
-        self.voice = VoiceEngine()
+        if not text_mode:
+            from voice_engine import VoiceEngine
+            self.voice = VoiceEngine()
 
         # Sürekli dinleme döngüsü
         while True:
             try:
-                # 1. Aşama: Sadece "Mustafa" kelimesini bekle (Arka planda bloklamadan çalışır)
-                woke_up = await asyncio.to_thread(self.voice.listen_for_wake_word)
+                user_message = ""  # Mesajı başta boş tanımlıyoruz
 
-                if woke_up:
-                    # 2. Aşama: Uyanır uyanmaz sistem sesini %30'a kıs (Ducking)
-                    os_actions.start_ducking()
+                if text_mode:
+                    # --- METİN MODU ---
+                    try:
+                        user_message = await asyncio.to_thread(input, "\n[SİZ]: ")
+                    except UnicodeDecodeError:
+                        continue
 
-                    # 3. Aşama: Komutu dinle ve metne çevir
-                    user_message = await asyncio.to_thread(self.voice.record_and_transcribe)
+                    if not user_message.strip():
+                        continue
+                else:
+                    # --- SES MODU ---
+                    # 1. Aşama: Sadece "Mustafa" kelimesini bekle
+                    woke_up = await asyncio.to_thread(self.voice.listen_for_wake_word)
 
-                    if user_message:
-                        import string
-                        clean_msg = user_message.translate(str.maketrans('', '', string.punctuation)).lower().strip()
+                    if woke_up:
+                        # 2. Aşama: Uyanır uyanmaz sistem sesini %30'a kıs (Ducking)
+                        os_actions.start_ducking()
 
-                        # DÜZELTİLDİ: Artık temizlenmiş olan clean_msg değişkenini kontrol ediyoruz
-                        if clean_msg in ["kapat", "çıkış", "sistemi kapat", "kendini kapat", "exit", "bye"]:
-                            print("\n[SİSTEM] Güvenli çıkış yapılıyor. Görüşmek üzere efendim!")
+                        # 3. Aşama: Komutu dinle ve metne çevir
+                        user_message = await asyncio.to_thread(self.voice.record_and_transcribe)
+                    else:
+                        continue  # Uyanmadıysa döngünün başına dön
+
+                # === ORTAK ALAN: Hem metin hem ses buradan geçecek ===
+                if user_message:
+                    import string
+                    clean_msg = user_message.translate(str.maketrans('', '', string.punctuation)).lower().strip()
+
+                    # Kapanma komutlarını kontrol et
+                    if clean_msg in ["kapat", "çıkış", "sistemi kapat", "kendini kapat", "exit", "bye", "/exit"]:
+                        print("\n[SİSTEM] Güvenli çıkış yapılıyor. Görüşmek üzere efendim!")
+                        if not text_mode:
                             os_actions.stop_ducking()
-                            break
+                        break
 
-                        # 4. Aşama: Gelen sesi bulut/lokal LLM'e gönder ve eylemi yap
-                        await asyncio.to_thread(self.execute_command, user_message, "cloud")
+                    # 4. Aşama: Gelen sesi/metni bulut/lokal LLM'e gönder ve eylemi yap
+                    await asyncio.to_thread(self.execute_command, user_message, "cloud")
 
-                    # 5. Aşama: İşlem bitince müziğin sesini eski orijinal seviyesine geri getir
+                # 5. Aşama: İşlem bitince müziğin sesini eski orijinal seviyesine geri getir (Sadece Ses Modunda)
+                if not text_mode and user_message:
                     os_actions.stop_ducking()
 
             except (KeyboardInterrupt, EOFError):
                 print("\n[SİSTEM] Döngü manuel olarak sonlandırıldı.")
-                os_actions.stop_ducking()
+                if not text_mode:
+                    os_actions.stop_ducking()
                 break
             except Exception as e:
                 print(f"\n[SİSTEM HATA] Ana döngüde beklenmedik hata: {e}")
-                os_actions.stop_ducking()
+                if not text_mode:
+                    os_actions.stop_ducking()
 
 # --- OTONOM BAŞLATICI ---
 if __name__ == "__main__":
+    is_text_mode = "--text" in sys.argv
+
     asistan = MustafaYargicBrain()
 
     try:
         # Asenkron dünyayı başlatıyoruz!
-        asyncio.run(asistan.run())
+        asyncio.run(asistan.run(text_mode=is_text_mode))
     finally:
         # Program kapandığında açık olan tüm soketleri temizle
         if asistan.ipc and asistan.ipc.connected:
