@@ -31,7 +31,7 @@ class VoiceEngine:
             SetLogLevel(-1)
 
             # İndirdiğimiz 35 MB'lık modeli yüklüyoruz
-            self.vosk_model = Model("models/vosk")
+            self.vosk_model = Model("models/vosk/tr")
 
             # SADECE UYANDIRMA KELİMELERİNİ DİNLE (Kısıtlı Sözlük - RAM/CPU Dostu)
             grammar = json.dumps(self.wake_words + ["[unk]"])
